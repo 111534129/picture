@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h1 style="font-size: 2.5rem; color: #333;">#{{ tag.name }}</h1>
+        <p style="color: #666;">共有 {{ photos|length }} 張公開照片</p>
+    </div>
+
+    {% if photos %}
+    <div class="gallery"
+        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">
+        {% for photo in photos %}
+        <div class="photo-card" style="break-inside: avoid; margin-bottom: 20px;">
+            <a href="{{ url_for('main.photo', id=photo.id) }}" style="text-decoration: none; color: inherit;">
+                <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}"
+                    style="width: 100%; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: transform 0.2s;"
+                    onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+            </a>
+            <div style="margin-top: 8px; font-size: 0.9rem;">
+                <a href="{{ url_for('main.user', username=photo.uploader.username) }}"
+                    style="color: #666; text-decoration: none;">
+                    {{ photo.uploader.username }}
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 50px; background-color: #f9f9f9; border-radius: 10px;">
+        <p style="color: #777; font-size: 1.2rem;">目前還沒有關於 #{{ tag.name }} 的公開照片。</p>
+        <p><a href="{{ url_for('main.index') }}" class="btn">回到首頁</a></p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>建立新相簿 <a href="{{ url_for('main.import_album') }}" style="font-size: 0.6em; margin-left: 20px;">(或匯入備份)</a></h1>
+<form action="" method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.title.label }}<br>
+        {{ form.title(class="form-control") }}
+        {% for error in form.title.errors %}
+        <span class="error">[{{ error }}]</span>
+        {% endfor %}
+    </div>
+    <div class="form-group">
+        {{ form.description.label }}<br>
+        {{ form.description(class="form-control", rows=3) }}
+        {% for error in form.description.errors %}
+        <span class="error">[{{ error }}]</span>
+        {% endfor %}
+    </div>
+    <div class="form-group">
+        {{ form.privacy.label }}<br>
+        {{ form.privacy(class="form-control") }}
+        {% for error in form.privacy.errors %}
+        <span class="error">[{{ error }}]</span>
+        {% endfor %}
+    </div>
+    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+        {{ form.allow_download() }}
+        {{ form.allow_download.label(style="margin: 0;") }}
+    </div>
+    <div class="form-group">
+        {{ form.submit(class="btn") }}
+    </div>
+</form>
+{% endblock %}

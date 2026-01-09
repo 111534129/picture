@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>匯入備份相簿</h1>
+<p style="color: gray;">請上傳先前匯出的相簿壓縮檔 (.zip)。系統將自動建立一本新的私密相簿並還原照片。</p>
+
+<form action="" method="post" enctype="multipart/form-data" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        {{ form.file.label }}<br>
+        {{ form.file(class="form-control-file") }}
+        {% for error in form.file.errors %}
+        <span class="error">[{{ error }}]</span>
+        {% endfor %}
+    </div>
+    <div class="form-group" style="margin-top: 20px;">
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="{{ url_for('main.index') }}" class="btn" style="background-color: transparent; border: 1px solid #ddd; color: #555; margin-left: 10px; text-decoration: none;">取消</a>
+    </div>
+</form>
+{% endblock %}

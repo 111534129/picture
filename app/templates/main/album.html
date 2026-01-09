@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h1>{{ album.title }}</h1>
+        <p>{{ album.description | linkify_tags | safe }}</p>
+        <small>By {{ album.author.username }} | {{ album.created_at.strftime('%Y-%m-%d') }} | {{ album.privacy
+            }}</small>
+    </div>
+    {% if current_user == album.author %}
+    <div>
+        <!-- Upload Modal Trigger or Form Toggle could go here -->
+    </div>
+    {% endif %}
+</div>
+
+<hr>
+
+{% if current_user.is_authenticated and (current_user == album.author or current_user.role == 'admin') %}
+<div style="background: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h4 style="margin: 0;">{% if current_user == album.author %}上傳照片{% else %}管理員操作{% endif %}</h4>
+        <form action="{{ url_for('main.delete_album', id=album.id) }}" method="post"
+            onsubmit="return confirm('確定要刪除此相簿嗎？相簿內的所有照片也將被刪除！');" style="display: inline;">
+            <button type="submit" class="btn"
+                style="background-color: #dc3545; padding: 5px 10px; font-size: 0.9rem;">刪除相簿 (Admin)</button>
+        </form>
+        <a href="{{ url_for('main.export_album', id=album.id) }}" class="btn"
+            style="background-color: #28a745; padding: 5px 10px; font-size: 0.9rem; margin-left: 10px; text-decoration: none; color: white;">匯出相簿
+            (ZIP)</a>
+
+        <!-- Reorder Toggle Button -->
+        <button id="toggleSortBtn" class="btn"
+            style="background-color: #17a2b8; padding: 5px 10px; font-size: 0.9rem; margin-left: 10px; color: white;">
+            調整順序
+        </button>
+        <button id="saveSortBtn" class="btn"
+            style="background-color: #007bff; padding: 5px 10px; font-size: 0.9rem; margin-left: 10px; color: white; display: none;">
+            確認位置
+        </button>
+
+        <!-- Report Button (For everyone except author) -->
+        {% if current_user.is_authenticated and current_user != album.author %}
+        <button onclick="document.getElementById('reportModal').style.display='block'" class="btn"
+            style="background-color: transparent; border: 1px solid #dc3545; color: #dc3545; font-size: 0.9rem; margin-left: 10px;">
+            檢舉
+        </button>
+        {% endif %}
+    </div>
+    {% if current_user == album.author %}
+    <form action="" method="post" enctype="multipart/form-data" novalidate>
+        {{ upload_form.hidden_tag() }}
+        <div class="form-group">
+            {{ upload_form.photos(class="form-control", multiple=True) }}
+            {% for error in upload_form.photos.errors %}
+            <span class="error">[{{ error }}]</span>
+            {% endfor %}
+        </div>
+        {{ upload_form.submit(class="btn") }}
+    </form>
+    {% endif %}
+
+    <!-- Private Sharing Control -->
+    {% if album.privacy == 'private' %}
+    <div style="background: #e9ecef; padding: 15px; border-radius: 5px; margin-top: 15px;">
+        <h4 style="margin-top: 0;">私密分享設定</h4>
+        <p style="font-size: 0.9em; color: #666;">將相簿分享給特定使用者（即使是相簿是私密的，這些人也能看到）。</p>
+
+        <form action="{{ url_for('main.share_album', id=album.id) }}" method="post"
+            style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="text" name="username" class="form-control" placeholder="輸入使用者名稱" required>
+            <button type="submit" class="btn" style="white-space: nowrap;">分享</button>
+        </form>
+
+        {% if album.shared_users.count() > 0 %}
+        <h5>已分享給：</h5>
+        <ul style="list-style: none; padding: 0;">
+            {% for user in album.shared_users %}
+            <li
+                style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 5px 0;">
+                <span>{{ user.username }}</span>
+                <form action="{{ url_for('main.unshare_album', id=album.id) }}" method="post" style="margin: 0;">
+                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                    <button type="submit" class="btn"
+                        style="background-color: #dc3545; padding: 2px 5px; font-size: 0.8rem;">移除</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #888; font-style: italic;">目前未分享給任何人。</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- If user is not author but authenticated, show a simple header/actions area if specific actions are needed (like report) -->
+{% if current_user.is_authenticated and current_user != album.author and album.privacy != 'private' %}
+<!-- Could add a header actions here if needed, but currently report button is inside the author/admin block or we need a new block -->
+<!-- Wait, the previous block has "if current_user == album.author or current_user.role == 'admin'" -->
+<!-- Regular users don't see that block. So we need a separate place for Report button for regular users. -->
+<div style="margin-bottom: 20px; text-align: right;">
+    <button onclick="document.getElementById('reportModal').style.display='block'" class="btn"
+        style="background-color: transparent; border: 1px solid #dc3545; color: #dc3545; font-size: 0.9rem;">
+        檢舉相簿
+    </button>
+</div>
+{% endif %}
+
+<div id="photoGallery" class="gallery"
+    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+    {% for photo in photos %}
+    <div class="photo-card" data-id="{{ photo.id }}"
+        style="border: 1px solid #ddd; padding: 5px; border-radius: 4px; background: white;">
+        <a href="{{ url_for('main.photo', id=photo.id) }}" class="photo-link">
+            <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="Photo"
+                style="width: 100%; height: 200px; object-fit: cover; display: block;">
+        </a>
+        <div style="padding: 5px;">
+            <small style="display: block; margin-bottom: 5px; color: #666; cursor: default;"
+                title="{{ photo.original_filename }}">
+                {{ photo.original_filename[:20] }}{% if photo.original_filename|length > 20 %}...{% endif %}
+            </small>
+            {% if photo.tags %}
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                {% for tag in photo.tags[:2] %}
+                <a href="{{ url_for('main.tag', name=tag.name) }}"
+                    style="background: #e9ecef; color: #495057; font-size: 0.75rem; padding: 1px 6px; border-radius: 10px; text-decoration: none;">
+                    #{{ tag.name }}
+                </a>
+                {% endfor %}
+                {% if photo.tags|length > 2 %}
+                <span style="font-size: 0.75rem; color: #999;">+{{ photo.tags|length - 2 }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('photoGallery');
+        var sortable = null;
+        var toggleBtn = document.getElementById('toggleSortBtn');
+        var saveBtn = document.getElementById('saveSortBtn');
+        var photoLinks = document.querySelectorAll('.photo-link');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function () {
+                // Enable Sorting
+                if (!sortable) {
+                    sortable = Sortable.create(el, {
+                        animation: 150,
+                        ghostClass: 'sortable-ghost',
+                        disabled: false,
+                    });
+
+                    toggleBtn.style.display = 'none';
+                    saveBtn.style.display = 'inline-block';
+
+                    // Disable links while sorting to prevent accidental clicks
+                    document.querySelectorAll('.photo-link').forEach(function (link) {
+                        link.style.pointerEvents = 'none';
+                    });
+
+                    // Add visual cue
+                    el.style.border = '2px dashed #17a2b8';
+                    el.style.padding = '10px';
+                }
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function () {
+                if (sortable) {
+                    var order = sortable.toArray(); // Get array of data-id
+
+                    // Disable button
+                    saveBtn.textContent = '儲存中...';
+                    saveBtn.disabled = true;
+
+                    fetch("{{ url_for('main.reorder_photos', id=album.id) }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ photo_ids: order })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                alert('順序已儲存！');
+
+                                // Reset UI
+                                sortable.destroy();
+                                sortable = null;
+
+                                toggleBtn.style.display = 'inline-block';
+                                saveBtn.style.display = 'none';
+                                saveBtn.textContent = '確認位置';
+                                saveBtn.disabled = false;
+
+                                // Re-enable links
+                                document.querySelectorAll('.photo-link').forEach(function (link) {
+                                    link.style.pointerEvents = 'auto';
+                                });
+
+                                // Remove visual cue
+                                el.style.border = 'none';
+                                el.style.padding = '0';
+                            } else {
+                                alert('儲存失敗：' + data.message);
+                                saveBtn.textContent = '確認位置';
+                                saveBtn.disabled = false;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('發生錯誤，請稍後再試。');
+                            saveBtn.textContent = '確認位置';
+                            saveBtn.disabled = false;
+                        });
+                }
+            });
+        }
+    });
+
+    function toggleOtherInput(radio) {
+        var input = document.getElementById('otherReasonInput');
+        var radios = document.getElementsByName('reason');
+
+        // Reset all
+        radios.forEach(function (r) {
+            if (r.value !== '其他') {
+                r.addEventListener('change', function () {
+                    input.style.display = 'none';
+                    input.required = false;
+                });
+            }
+        });
+
+        if (radio.checked && radio.value === '其他') {
+            input.style.display = 'block';
+            input.required = true;
+        }
+    }
+
+    // Add listeners to other radios to hide input
+    document.querySelectorAll('input[name="reason"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            var input = document.getElementById('otherReasonInput');
+            if (this.value !== '其他') {
+                input.style.display = 'none';
+                input.required = false;
+            } else {
+                input.style.display = 'block';
+                input.required = true;
+            }
+        });
+    });
+</script>
+
+<!-- Report Modal -->
+<div id="reportModal"
+    style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+    <div
+        style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px;">
+        <span onclick="document.getElementById('reportModal').style.display='none'"
+            style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        <h2>檢舉相簿</h2>
+        <form action="{{ url_for('main.report_content') }}" method="post">
+            <input type="hidden" name="type" value="album">
+            <input type="hidden" name="id" value="{{ album.id }}">
+
+            <div class="form-group">
+                <label>請選擇檢舉理由：</label><br>
+                <div style="margin-bottom: 10px;">
+                    <input type="radio" id="ra1" name="reason" value="色情或裸露內容" required>
+                    <label for="ra1">色情或裸露內容</label>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="radio" id="ra2" name="reason" value="暴力或仇恨言論">
+                    <label for="ra2">暴力或仇恨言論</label>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="radio" id="ra3" name="reason" value="騷擾或霸凌">
+                    <label for="ra3">騷擾或霸凌</label>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="radio" id="ra4" name="reason" value="垃圾訊息或詐騙">
+                    <label for="ra4">垃圾訊息或詐騙</label>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="radio" id="ra5" name="reason" value="其他" onchange="toggleOtherInput(this)">
+                    <label for="ra5">其他</label>
+                    <input type="text" name="other_reason" id="otherReasonInput" class="form-control"
+                        style="display:none; margin-top: 5px;" placeholder="請說明詳細檢舉原因...">
+                </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 20px;">
+                <button type="button" onclick="document.getElementById('reportModal').style.display='none'" class="btn"
+                    style="background-color: #6c757d; color: white;">取消</button>
+                <button type="submit" class="btn"
+                    style="background-color: #dc3545; color: white; margin-left: 10px;">送出檢舉</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

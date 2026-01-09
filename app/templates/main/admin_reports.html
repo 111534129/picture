@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <h1>檢舉審核 (管理員)</h1>
+    <a href="{{ url_for('main.index') }}" class="btn" style="float: right;">返回首頁</a>
+</div>
+
+{% if report_items %}
+<div class="report-list">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #f8f9fa;">
+                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: left;">檢舉人</th>
+                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: left;">檢舉對象</th>
+                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: left;">理由</th>
+                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: left;">時間</th>
+                <th style="padding: 10px; border-bottom: 2px solid #ddd; text-align: left;">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report_items %}
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px;">{{ item.report.reporter.username }}</td>
+                <td style="padding: 10px;">
+                    <span style="badge badge-secondary">{{ item.report.target_type }}</span>
+                    {% if item.target %}
+                    {% if item.report.target_type == 'album' %}
+                    <a href="{{ url_for('main.album', id=item.target.id) }}" target="_blank">{{ item.target.title }}</a>
+                    {% elif item.report.target_type == 'photo' %}
+                    <a href="{{ url_for('main.photo', id=item.target.id) }}" target="_blank">查看照片 #{{ item.target.id
+                        }}</a>
+                    <br>
+                    <img src="{{ url_for('static', filename='uploads/' + item.target.filename) }}"
+                        style="width: 50px; height: 50px; object-fit: cover;">
+                    {% endif %}
+                    {% else %}
+                    <span style="color: red;">(內容已不存在)</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 10px;">{{ item.report.reason }}</td>
+                <td style="padding: 10px;">{{ item.report.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td style="padding: 10px;">
+                    <div style="display: flex; gap: 5px;">
+                        <!-- Ban Form -->
+                        <form action="{{ url_for('main.resolve_report', id=item.report.id) }}" method="post"
+                            onsubmit="return confirm('確定要下架此內容嗎？作者將會收到通知。');">
+                            <input type="hidden" name="action" value="ban">
+                            <button type="submit" class="btn"
+                                style="background-color: #dc3545; color: white; padding: 5px 10px;">下架 (Ban)</button>
+                        </form>
+
+                        <!-- Dismiss Form -->
+                        <form action="{{ url_for('main.resolve_report', id=item.report.id) }}" method="post">
+                            <input type="hidden" name="action" value="dismiss">
+                            <button type="submit" class="btn"
+                                style="background-color: #6c757d; color: white; padding: 5px 10px;">駁回</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p style="text-align: center; color: #888; margin-top: 50px;">目前沒有待審核的檢舉。</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>管理員後台</h1>
+
+    <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; flex: 1; text-align: center;">
+            <h3>使用者總數</h3>
+            <p style="font-size: 2rem; font-weight: bold; margin: 0;">{{ users|length }}</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; flex: 1; text-align: center;">
+            <h3>相簿總數</h3>
+            <p style="font-size: 2rem; font-weight: bold; margin: 0;">{{ albums|length }}</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; flex: 1; text-align: center;">
+            <h3>照片總數</h3>
+            <p style="font-size: 2rem; font-weight: bold; margin: 0;">{{ photos|length }}</p>
+        </div>
+        <a href="{{ url_for('main.admin_reports') }}" style="text-decoration: none; color: inherit; flex: 1;">
+            <div
+                style="background: {% if pending_reports_count > 0 %}#dc3545{% else %}#28a745{% endif %}; color: white; padding: 20px; border-radius: 5px; text-align: center; transition: opacity 0.3s;">
+                <h3>待審核檢舉</h3>
+                <p style="font-size: 2rem; font-weight: bold; margin: 0;">{{ pending_reports_count }}</p>
+            </div>
+        </a>
+    </div>
+
+    <h2>使用者管理</h2>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <thead>
+            <tr style="background: #eee;">
+                <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
+                <th style="padding: 10px; border: 1px solid #ddd;">使用者名稱</th>
+                <th style="padding: 10px; border: 1px solid #ddd;">Email</th>
+                <th style="padding: 10px; border: 1px solid #ddd;">角色</th>
+                <th style="padding: 10px; border: 1px solid #ddd;">加入時間</th>
+                <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ user.id }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">
+                    <a href="{{ url_for('main.user', username=user.username) }}">{{ user.username }}</a>
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ user.email }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                    {% if user.role == 'admin' %}
+                    <span style="color: red; font-weight: bold;">管理員</span>
+                    {% else %}
+                    一般使用者
+                    {% endif %}
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{
+                    user.created_at.strftime('%Y-%m-%d') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                    {% if user != current_user %}
+                    <form action="{{ url_for('main.delete_user', id=user.id) }}" method="post"
+                        onsubmit="return confirm('確定要刪除使用者 {{ user.username }} 嗎？此操作無法復原，且會刪除其所有資料！');"
+                        style="display: inline;">
+                        <button type="submit" class="btn"
+                            style="background-color: #dc3545; padding: 5px 10px; font-size: 0.8rem;">刪除</button>
+                    </form>
+                    {% else %}
+                    <span style="color: #999;">(本人)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
