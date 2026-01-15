@@ -424,14 +424,48 @@ def delete_user(id):
         flash('您不能刪除自己的帳號。')
         return redirect(url_for('main.admin_dashboard'))
     
+    # Collect files to delete
+    files_to_delete = []
+    
+    # User avatar
+    if user.avatar:
+        files_to_delete.append(os.path.join(current_app.config['UPLOAD_FOLDER'], user.avatar))
+        
+    # Album photos
     for album in user.albums:
         for photo in album.photos:
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename)
-            if os.path.exists(file_path):
+            files_to_delete.append(os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename))
+
+    try:
+        # Manually delete reports filed by this user to avoid FK constraint errors
+        # (SQLAlchemy cascade might fail if attempting to set reporter_id to NULL on non-nullable column)
+        for report in user.reports_filed:
+            db.session.delete(report)
+            
+        # Manually delete notifications authored by this user
+        notifications_authored = Notification.query.filter_by(author_id=user.id).all()
+        for n in notifications_authored:
+            db.session.delete(n)
+            
+        # Clear relationships to be safe (Followers association table)
+        user.followed = []
+        user.followers = []
+            
+        db.session.delete(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f'刪除使用者失敗：{str(e)}')
+        return redirect(url_for('main.admin_dashboard'))
+        
+    # Delete physical files only after successful DB commit
+    for file_path in files_to_delete:
+        if os.path.exists(file_path):
+            try:
                 os.remove(file_path)
+            except OSError:
+                pass # Ignore file deletion errors
                 
-    db.session.delete(user)
-    db.session.commit()
     flash(f'使用者 {user.username} 已刪除。')
     return redirect(url_for('main.admin_dashboard'))
 

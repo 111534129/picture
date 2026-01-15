@@ -43,12 +43,11 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
-    albums = db.relationship('Album', backref='author', lazy='dynamic')
-    photos = db.relationship('Photo', backref='uploader', lazy='dynamic')
-    comments = db.relationship('Comment', backref='author', lazy='dynamic')
-    comments = db.relationship('Comment', backref='author', lazy='dynamic')
+    albums = db.relationship('Album', backref='author', lazy='dynamic', cascade='all, delete-orphan')
+    photos = db.relationship('Photo', backref='uploader', lazy='dynamic', cascade='all, delete-orphan')
+    comments = db.relationship('Comment', backref='author', lazy='dynamic', cascade='all, delete-orphan')
     shared_albums = db.relationship('Album', secondary=album_shares, backref=db.backref('shared_users', lazy='dynamic'))
-    liked_photos = db.relationship('Like', backref='user', lazy='dynamic')
+    liked_photos = db.relationship('Like', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
     followed = db.relationship(
         'User', secondary=followers,
@@ -184,7 +183,7 @@ class Notification(db.Model):
     is_read = db.Column(db.Boolean, default=False)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
 
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('notifications', lazy='dynamic'))
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('notifications', lazy='dynamic', cascade='all, delete-orphan'))
     author = db.relationship('User', foreign_keys=[author_id])
 
 class Report(db.Model):
@@ -198,7 +197,7 @@ class Report(db.Model):
     status = db.Column(db.String(20), default='pending') # pending, resolved, dismissed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    reporter = db.relationship('User', backref='reports_filed')
+    reporter = db.relationship('User', backref=db.backref('reports_filed', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<Notification {self.type}>'
