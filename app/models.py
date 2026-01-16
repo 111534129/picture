@@ -3,12 +3,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import db, login_manager
 
-# Association table for shared albums
+# Association table for shared albums (many-to-many relationship)
+# 用於相簿分享的關聯表 (多對多)
 album_shares = db.Table('album_shares',
     db.Column('album_id', db.Integer, db.ForeignKey('albums.id', ondelete='CASCADE'), primary_key=True),
     db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
 )
 
+# Association table for followers (self-referential many-to-many)
+# 用於使用者追蹤功能的關聯表 (自關聯多對多)
 followers = db.Table('followers',
     db.Column('follower_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('followed_id', db.Integer, db.ForeignKey('users.id'), primary_key=True)
@@ -21,6 +24,10 @@ photo_tags = db.Table('photo_tags',
 )
 
 class Tag(db.Model):
+    """
+    Tag Model for hashtags.
+    標籤模型，用於儲存 Hashtags。
+    """
     __tablename__ = 'tags'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, index=True, nullable=False)
@@ -30,6 +37,10 @@ class Tag(db.Model):
         return f'<Tag {self.name}>'
 
 class User(UserMixin, db.Model):
+    """
+    User Model.
+    使用者模型，包含所有使用者相關資訊與關聯。
+    """
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -38,17 +49,19 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     avatar = db.Column(db.String(200))
     intro = db.Column(db.Text)
-    role = db.Column(db.String(20), default='user') # 'user' or 'admin'
-    liked_photos_privacy = db.Column(db.String(20), default='public') # public, private, shared
+    role = db.Column(db.String(20), default='user') # 'user' or 'admin' (一般使用者或管理員)
+    liked_photos_privacy = db.Column(db.String(20), default='public') # public, private, shared (按讚內容隱私設定)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationships
+    # Relationships (關聯定義)
+    # cascade='all, delete-orphan' ensures related data is deleted when user is deleted
     albums = db.relationship('Album', backref='author', lazy='dynamic', cascade='all, delete-orphan')
     photos = db.relationship('Photo', backref='uploader', lazy='dynamic', cascade='all, delete-orphan')
     comments = db.relationship('Comment', backref='author', lazy='dynamic', cascade='all, delete-orphan')
     shared_albums = db.relationship('Album', secondary=album_shares, backref=db.backref('shared_users', lazy='dynamic'))
     liked_photos = db.relationship('Like', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
+    # Follow system relationships (追蹤系統)
     followed = db.relationship(
         'User', secondary=followers,
         primaryjoin=(followers.c.follower_id == id),
@@ -108,15 +121,19 @@ def load_user(id):
     return User.query.get(int(id))
 
 class Album(db.Model):
+    """
+    Album Model.
+    相簿模型，包含隱私設定與封面。
+    """
     __tablename__ = 'albums'
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-    privacy = db.Column(db.String(20), default='public') # public, private, shared
+    privacy = db.Column(db.String(20), default='public') # public, private, shared (隱私設定)
     allow_download = db.Column(db.Boolean, default=True)
-    is_banned = db.Column(db.Boolean, default=False)
+    is_banned = db.Column(db.Boolean, default=False) # Content moderation flag (檢舉屏蔽標記)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     cover_id = db.Column(db.Integer, db.ForeignKey('photos.id', use_alter=True, name='fk_album_cover_photo'), nullable=True)
     
@@ -128,6 +145,10 @@ class Album(db.Model):
         return f'<Album {self.title}>'
 
 class Photo(db.Model):
+    """
+    Photo Model.
+    照片模型。
+    """
     __tablename__ = 'photos'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -136,8 +157,8 @@ class Photo(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=False)
     filesize = db.Column(db.Integer)
-    position = db.Column(db.Integer, default=0)
-    is_banned = db.Column(db.Boolean, default=False)
+    position = db.Column(db.Integer, default=0) # For custom sorting (自訂排序用)
+    is_banned = db.Column(db.Boolean, default=False) # Content moderation flag (檢舉屏蔽標記)
     taken_at = db.Column(db.DateTime)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -187,14 +208,18 @@ class Notification(db.Model):
     author = db.relationship('User', foreign_keys=[author_id])
 
 class Report(db.Model):
+    """
+    Report Model for moderation.
+    檢舉模型，用於內容審查。
+    """
     __tablename__ = 'reports'
     
     id = db.Column(db.Integer, primary_key=True)
     reporter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    target_type = db.Column(db.String(20), nullable=False) # 'photo' or 'album'
+    target_type = db.Column(db.String(20), nullable=False) # 'photo' or 'album' (檢舉對象類型)
     target_id = db.Column(db.Integer, nullable=False)
     reason = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(20), default='pending') # pending, resolved, dismissed
+    status = db.Column(db.String(20), default='pending') # pending, resolved, dismissed (處理狀態)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     reporter = db.relationship('User', backref=db.backref('reports_filed', cascade='all, delete-orphan'))

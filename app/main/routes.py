@@ -14,12 +14,18 @@ from app.main.forms import AlbumForm, PhotoUploadForm, CommentForm, EditProfileF
 from app.models import Album, Photo, Comment, User, Notification, Report, Tag, photo_tags
 
 @bp.route('/')
+@bp.route('/')
 @bp.route('/index')
 def index():
+    """
+    Main Index Page.
+    首頁路由，負責顯示動態牆與探索內容。
+    """
     tab = request.args.get('tab', 'discovery')
     items = []
     
     if tab == 'following':
+        # Following Feed Logic (好友動態)
         if not current_user.is_authenticated:
             flash('請先登入以查看好友動態。')
             return redirect(url_for('auth.login'))
@@ -28,26 +34,31 @@ def index():
         followed_ids = [u.id for u in current_user.followed.all()]
         if followed_ids:
             # Query photos from followed users found in PUBLIC albums
-            # (Simplification for MVP: only showing public content in feed to avoid complex privacy queries in one go)
+            # 簡化邏輯：目前動態牆僅顯示公開相簿的照片，避免複雜的隱私權限判斷拖慢效能
             items = Photo.query.join(Album, Photo.album_id == Album.id).filter(
                 Photo.user_id.in_(followed_ids),
                 Album.privacy == 'public',
-                (Photo.is_banned == False) | (Photo.is_banned == None)
+                (Photo.is_banned == False) | (Photo.is_banned == None) # Filter out banned content (過濾違規內容)
             ).order_by(Photo.uploaded_at.desc()).all()
     else:
-        # Default: Discovery (Public Albums)
+        # Default: Discovery (Public Albums) (預設：探索公開相簿)
         items = Album.query.filter_by(privacy='public').filter((Album.is_banned == False) | (Album.is_banned == None)).order_by(Album.created_at.desc()).all()
         
     return render_template('index.html', title='Home', items=items, tab=tab)
 
 def parse_tags(text):
+    """
+    Helper function to parse hashtags from text.
+    解析文字中的 Hashtags，並自動建立或關聯標籤物件。
+    """
     if not text:
         return []
-    # Find all hashtags - more robust regex for various languages
-    # Matches # followed by non-whitespace and non-special-punctuation characters
+    # Find all hashtags - more robust regex for various languages (Unicode support)
+    # 正則表達式：支援中文、英文等 Unicode 字元，排除標點符號
     tag_names = list(set(re.findall(r'#([^\s#.,!@$%^&*()=+\[\]{};\':"\\|<>/?？，。！]+)', text)))
     tags = []
     for name in tag_names:
+        # Find existing tag or create new one (查找既有標籤或建立新標籤)
         tag = Tag.query.filter_by(name=name).first()
         if not tag:
             tag = Tag(name=name)
@@ -73,6 +84,10 @@ def inject_notifications():
 @bp.route('/albums/new', methods=['GET', 'POST'])
 @login_required
 def new_album():
+    """
+    Create New Album.
+    建立新相簿路由，包含追蹤者通知邏輯。
+    """
     form = AlbumForm()
     if form.validate_on_submit():
         album = Album(title=form.title.data, description=form.description.data, 
@@ -80,7 +95,7 @@ def new_album():
         db.session.add(album)
         db.session.commit()
         
-        # Notify followers
+        # Notify followers (通知追蹤者)
         followers = current_user.followers.all()
         for follower in followers:
             follower.add_notification('new_album', current_user, album.id)
@@ -99,10 +114,10 @@ def album(id):
         flash('此內容因違反社群規範已被移除。')
         return redirect(url_for('main.index'))
         
-    # Check permission
-    # Public: Allow everyone
-    # Private: Allow author only
-    # Shared: Allow author (and friends logic later)
+    # Check permission (隱私權限檢查)
+    # Public: Allow everyone (公開：所有人可見)
+    # Private: Allow author only (私密：僅作者可見)
+    # Shared: Allow author, mutual friends, or specifically shared users (分享：好友或特定對象)
     if album.privacy != 'public':
         if not current_user.is_authenticated:
              flash('請登入以檢視此相簿。')
@@ -111,10 +126,10 @@ def album(id):
         # Allow author
         if album.author == current_user:
             pass
-        # Allow mutual friends for 'shared' albums
+        # Allow mutual friends for 'shared' albums (若互為追蹤好友)
         elif album.privacy == 'shared' and current_user.is_mutual_following(album.author):
             pass
-        # Allow specifically shared users (works for private albums too)
+        # Allow specifically shared users (works for private albums too) (若在分享名單中)
         elif current_user in album.shared_users:
             pass
         else:
@@ -139,8 +154,8 @@ def album(id):
                               filename=filename, original_filename=file.filename,
                               filesize=os.path.getsize(file_path))
                 
-                # Check for tags in album description (as a fallback or default for now)
-                # Ideally, we should add a field to the upload form for tags
+                # Check for tags in album description (parse hashtags from description)
+                # 從相簿描述中自動解析標籤，並套用到該次上傳的所有照片
                 if album.description:
                     tags = parse_tags(album.description)
                     for tag in tags:
@@ -437,17 +452,17 @@ def delete_user(id):
             files_to_delete.append(os.path.join(current_app.config['UPLOAD_FOLDER'], photo.filename))
 
     try:
-        # Manually delete reports filed by this user to avoid FK constraint errors
+        # Manually delete reports filed by this user to avoid FK constraint errors (清除檢舉紀錄)
         # (SQLAlchemy cascade might fail if attempting to set reporter_id to NULL on non-nullable column)
         for report in user.reports_filed:
             db.session.delete(report)
             
-        # Manually delete notifications authored by this user
+        # Manually delete notifications authored by this user (清除發送過的通知)
         notifications_authored = Notification.query.filter_by(author_id=user.id).all()
         for n in notifications_authored:
             db.session.delete(n)
             
-        # Clear relationships to be safe (Followers association table)
+        # Clear relationships to be safe (Followers association table) (清除追蹤關係)
         user.followed = []
         user.followers = []
             
@@ -913,9 +928,10 @@ def tag(name):
     
     # Query all photos with this tag
     # Filter public albums only and not banned photos
+    # 查詢該標籤下的所有照片，並嚴格過濾掉私密相簿與違規內容
     photos = Photo.query.join(photo_tags).join(Album, Photo.album_id == Album.id).filter(
         photo_tags.c.tag_id == tag.id,
-        Album.privacy == 'public',
+        Album.privacy == 'public', # Only show public content in tag search (僅顯示公開內容)
         (Photo.is_banned == False) | (Photo.is_banned == None)
     ).order_by(Photo.uploaded_at.desc()).all()
     
